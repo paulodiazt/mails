@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Indicadores semanales — Análisis de correos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap');
+
+  :root{
+    --bg: #0E141C;
+    --panel: #161E29;
+    --panel-hover: #1B2432;
+    --border: #2A3547;
+    --text: #E7ECF3;
+    --text-muted: #8896A8;
+    --text-dim: #5C6879;
+
+    --lab: #4FD1C5;
+    --ventas: #F6AD55;
+    --compras: #63B3ED;
+    --operaciones: #F687B3;
+    --hub: #B794F4;
+    --otros: #7C8A9E;
+    --nodata: #3A4657;
+  }
+
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter', sans-serif;
+  }
+
+  .wrap{
+    max-width:1220px;
+    margin:0 auto;
+    padding:44px 40px 70px;
+  }
+
+  header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom:36px;
+    gap:20px;
+    flex-wrap:wrap;
+  }
+  header h1{
+    font-size:24px;
+    font-weight:700;
+    margin:0 0 6px;
+    letter-spacing:-0.01em;
+  }
+  header p{
+    margin:0;
+    color:var(--text-muted);
+    font-size:14px;
+  }
+  .badge{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    background:#1B2432;
+    border:1px solid var(--border);
+    border-radius:20px;
+    padding:6px 14px;
+    font-size:12.5px;
+    color:var(--text-muted);
+  }
+  .badge .dot{ width:6px; height:6px; border-radius:50%; background:#48BB78; }
+
+  .kpis{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:14px;
+    margin-bottom:32px;
+  }
+  .kpi{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:18px 20px;
+  }
+  .kpi .k-label{
+    font-size:12px;
+    color:var(--text-muted);
+    margin-bottom:10px;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+  }
+  .kpi .k-value{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:26px;
+    font-weight:700;
+  }
+  .kpi .k-sub{
+    font-size:12.5px;
+    color:var(--text-dim);
+    margin-top:6px;
+  }
+  .k-value.up{ color:#68D391; }
+  .k-value.down{ color:#FC8181; }
+  .k-value.flat{ color:var(--text); }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:22px 24px 18px;
+    margin-bottom:24px;
+  }
+  .panel-title{
+    font-size:15px;
+    font-weight:600;
+    margin:0 0 3px;
+  }
+  .panel-sub{
+    font-size:13px;
+    color:var(--text-muted);
+    margin:0 0 18px;
+  }
+
+  .row2{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:24px;
+  }
+
+  .legend-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:14px;
+    margin-top:14px;
+    padding-top:14px;
+    border-top:1px solid var(--border);
+  }
+  .legend-item{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:12.5px;
+    color:var(--text-muted);
+  }
+  .legend-dot{ width:9px; height:9px; border-radius:2px; }
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13.5px;
+  }
+  thead th{
+    text-align:left;
+    font-weight:600;
+    font-size:11.5px;
+    color:var(--text-muted);
+    text-transform:uppercase;
+    letter-spacing:0.03em;
+    padding:0 12px 10px 0;
+    border-bottom:1px solid var(--border);
+  }
+  thead th:not(:first-child){ text-align:right; }
+  tbody td{
+    padding:11px 12px 11px 0;
+    border-bottom:1px solid #1E2837;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+  }
+  tbody td:first-child{ font-family:'Inter', sans-serif; font-size:13.5px; }
+  tbody td:not(:first-child){ text-align:right; }
+  tbody tr.nodata td{ color:var(--text-dim); font-style:italic; }
+  tbody tr.nodata td:first-child{ font-style:normal; }
+  .pill{
+    display:inline-block;
+    padding:2px 9px;
+    border-radius:20px;
+    font-size:11px;
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+  }
+  .pill.nodata{ background:#2A3547; color:var(--text-dim); }
+
+  footer{
+    margin-top:8px;
+    font-size:12px;
+    color:var(--text-dim);
+    line-height:1.6;
+  }
+
+  @media (max-width:900px){
+    .kpis{ grid-template-columns:1fr 1fr; }
+    .row2{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Indicadores semanales de correo</h1>
+      <p>Clasificación de hilos por categoría — fuente: análisis mensual vía Copilot</p>
+    </div>
+    <div class="badge"><span class="dot"></span> Última actualización: 31/08 – 06/09/2026</div>
+  </header>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div class="k-label">Hilos — semana actual</div>
+      <div class="k-value" id="kpiTotal">—</div>
+      <div class="k-sub" id="kpiTotalSub">31/08 – 06/09</div>
+    </div>
+    <div class="kpi">
+      <div class="k-label">Variación vs. semana anterior</div>
+      <div class="k-value" id="kpiDelta">—</div>
+      <div class="k-sub">24/08 – 30/08 → 31/08 – 06/09</div>
+    </div>
+    <div class="kpi">
+      <div class="k-label">Categoría líder</div>
+      <div class="k-value" id="kpiTop" style="font-size:20px;">—</div>
+      <div class="k-sub" id="kpiTopSub">—</div>
+    </div>
+    <div class="kpi">
+      <div class="k-label">Cobertura de datos</div>
+      <div class="k-value">4/5</div>
+      <div class="k-sub">1 semana sin datos verificables (03/08–09/08)</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Evolución semanal por categoría</div>
+    <p class="panel-sub">Cantidad de hilos únicos clasificados, semana a semana</p>
+    <canvas id="lineChart" style="max-height:320px;"></canvas>
+  </div>
+
+  <div class="row2">
+    <div class="panel">
+      <div class="panel-title">Composición por semana</div>
+      <p class="panel-sub">Distribución de hilos entre categorías</p>
+      <canvas id="stackChart" style="max-height:280px;"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Detalle completo</div>
+      <p class="panel-sub">Todas las semanas registradas hasta ahora</p>
+      <table>
+        <thead>
+          <tr><th>Semana</th><th>Lab</th><th>Ventas</th><th>Compras</th><th>Operac.</th><th>HUB</th><th>Otros</th><th>Total</th></tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>
+    La semana 03/08–09/08 no cuenta con datos verificables (la búsqueda de Copilot no pudo recuperar correos del período con confiabilidad) y se muestra como hueco en los gráficos, no como actividad cero. Este tablero se actualiza reemplazando el archivo de datos — sin tocar el diseño ni el código.
+  </footer>
+
+</div>
+
+<script>
+const categories = [
+  { key: 'lab', label: 'Laboratorio', color: 'var(--lab)', hex: '#4FD1C5' },
+  { key: 'ventas', label: 'Ventas y Clientes', color: 'var(--ventas)', hex: '#F6AD55' },
+  { key: 'compras', label: 'Compras y Suministros', color: 'var(--compras)', hex: '#63B3ED' },
+  { key: 'operaciones', label: 'Operaciones de Campo', color: 'var(--operaciones)', hex: '#F687B3' },
+  { key: 'hub', label: 'Proyecto HUB', color: 'var(--hub)', hex: '#B794F4' },
+  { key: 'otros', label: 'Otros', color: 'var(--otros)', hex: '#7C8A9E' },
+];
+
+// ---- DATA: update this array each time you add a new week ----
+const weeks = [
+  { label: '03/08–09/08', short: '03-09/08', noData: true,  lab:null, ventas:null, compras:null, operaciones:null, hub:null, otros:null },
+  { label: '10/08–16/08', short: '10-16/08', noData: false, lab:3, ventas:6, compras:8, operaciones:3, hub:1, otros:5 },
+  { label: '17/08–23/08', short: '17-23/08', noData: false, lab:3, ventas:5, compras:3, operaciones:6, hub:1, otros:7 },
+  { label: '24/08–30/08', short: '24-30/08', noData: false, lab:3, ventas:7, compras:5, operaciones:4, hub:4, otros:1 },
+  { label: '31/08–06/09', short: '31/08-06/09', noData: false, lab:3, ventas:7, compras:8, operaciones:2, hub:2, otros:2 },
+];
+// ---------------------------------------------------------------
+
+function total(w){
+  return categories.reduce((s,c)=> s + (w[c.key] ?? 0), 0);
+}
+
+// KPIs
+const current = weeks[weeks.length-1];
+const previous = weeks[weeks.length-2];
+const curTotal = total(current);
+const prevTotal = total(previous);
+const delta = curTotal - prevTotal;
+const deltaPct = prevTotal ? ((delta/prevTotal)*100).toFixed(0) : 0;
+
+document.getElementById('kpiTotal').textContent = curTotal;
+const deltaEl = document.getElementById('kpiDelta');
+deltaEl.textContent = (delta>0? '+':'') + delta + ' (' + (delta>0?'+':'') + deltaPct + '%)';
+deltaEl.className = 'k-value ' + (delta>0?'up':delta<0?'down':'flat');
+
+let topCat = categories[0], topVal = -1;
+categories.forEach(c=>{ if((current[c.key]??0) > topVal){ topVal = current[c.key]; topCat = c; } });
+document.getElementById('kpiTop').textContent = topCat.label;
+document.getElementById('kpiTop').style.color = topCat.hex;
+document.getElementById('kpiTopSub').textContent = topVal + ' hilos esta semana';
+
+// Table
+const tbody = document.getElementById('tableBody');
+weeks.forEach(w=>{
+  const tr = document.createElement('tr');
+  if(w.noData){
+    tr.className = 'nodata';
+    tr.innerHTML = `<td>${w.label}</td><td colspan="6"><span class="pill nodata">Sin datos verificables</span></td><td>—</td>`;
+  } else {
+    tr.innerHTML = `<td>${w.label}</td><td>${w.lab}</td><td>${w.ventas}</td><td>${w.compras}</td><td>${w.operaciones}</td><td>${w.hub}</td><td>${w.otros}</td><td style="font-weight:700;">${total(w)}</td>`;
+  }
+  tbody.appendChild(tr);
+});
+
+// Line chart (gaps for missing week via spanGaps:false)
+new Chart(document.getElementById('lineChart'), {
+  type: 'line',
+  data: {
+    labels: weeks.map(w=>w.short),
+    datasets: categories.map(c => ({
+      label: c.label,
+      data: weeks.map(w => w.noData ? null : w[c.key]),
+      borderColor: c.hex,
+      backgroundColor: c.hex,
+      spanGaps: false,
+      tension: 0.3,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      borderWidth: 2,
+    }))
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    scales: {
+      x: { grid: { color:'#1E2837' }, ticks: { color:'#8896A8', font:{family:'IBM Plex Mono', size:11} } },
+      y: { grid: { color:'#1E2837' }, ticks: { color:'#8896A8', font:{family:'IBM Plex Mono', size:11}, precision:0 }, beginAtZero:true }
+    },
+    plugins: {
+      legend: { position:'bottom', labels:{ color:'#E7ECF3', font:{family:'Inter', size:12}, boxWidth:10, boxHeight:10, padding:14 } },
+      tooltip: {
+        callbacks: {
+          footer: (items) => {
+            const idx = items[0].dataIndex;
+            return weeks[idx].noData ? '⚠ Semana sin datos verificables' : '';
+          }
+        }
+      }
+    }
+  }
+});
+
+// Stacked bar chart
+new Chart(document.getElementById('stackChart'), {
+  type: 'bar',
+  data: {
+    labels: weeks.map(w=>w.short),
+    datasets: categories.map(c => ({
+      label: c.label,
+      data: weeks.map(w => w.noData ? 0 : w[c.key]),
+      backgroundColor: c.hex,
+      borderRadius: 2,
+    }))
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { stacked:true, grid: { display:false }, ticks: { color:'#8896A8', font:{family:'IBM Plex Mono', size:11} } },
+      y: { stacked:true, grid: { color:'#1E2837' }, ticks: { color:'#8896A8', font:{family:'IBM Plex Mono', size:11}, precision:0 } }
+    },
+    plugins: {
+      legend: { display:false },
+      tooltip: {
+        callbacks: {
+          label: ctx => weeks[ctx.dataIndex].noData ? '' : `${ctx.dataset.label}: ${ctx.raw}`,
+          footer: (items) => {
+            const idx = items[0].dataIndex;
+            return weeks[idx].noData ? '⚠ Sin datos verificables' : `Total: ${total(weeks[idx])}`;
+          }
+        }
+      }
+    }
+  }
+});
+</script>
+</body>
+</html>
