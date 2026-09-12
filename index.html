@@ -149,6 +149,42 @@
 
   #dashboard{ display:none; }
 
+  .filter-bar{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:20px;
+  }
+  .filter-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:20px;
+    padding:7px 14px 7px 10px;
+    font-size:12.5px;
+    font-family:'Inter', sans-serif;
+    color:var(--text-muted);
+    cursor:pointer;
+    user-select:none;
+    transition:opacity 0.15s, border-color 0.15s;
+  }
+  .filter-chip .chip-dot{
+    width:9px; height:9px; border-radius:2px; flex-shrink:0;
+  }
+  .filter-chip.active{ color:var(--text); border-color:currentColor; }
+  .filter-chip.inactive{ opacity:0.4; }
+  .filter-chip.inactive .chip-dot{ opacity:0.5; }
+  .filter-bar-all{
+    font-size:12px;
+    color:var(--text-muted);
+    text-decoration:underline;
+    cursor:pointer;
+    align-self:center;
+    margin-left:4px;
+  }
+
   @media (max-width:900px){
     .kpis{ grid-template-columns:1fr 1fr; }
     .row2{ grid-template-columns:1fr; }
@@ -193,9 +229,11 @@
       </div>
     </div>
 
+    <div class="filter-bar" id="filterBar"></div>
+
     <div class="panel">
       <div class="panel-title">Evolución semanal por categoría</div>
-      <p class="panel-sub">Cantidad de hilos únicos clasificados, semana a semana</p>
+      <p class="panel-sub">Cantidad de hilos únicos clasificados, semana a semana — tocá una categoría para ocultarla/mostrarla en ambos gráficos</p>
       <canvas id="lineChart" style="max-height:320px;"></canvas>
     </div>
 
@@ -243,6 +281,55 @@ function parseDateDMY(str){
 
 function total(w){
   return categories.reduce((s,c)=> s + (w[c.key] ?? 0), 0);
+}
+
+let lineChartInstance = null;
+let stackChartInstance = null;
+const activeCategories = new Set(categories.map(c => c.key));
+
+function buildFilterBar(){
+  const bar = document.getElementById('filterBar');
+  bar.innerHTML = '';
+  categories.forEach((c, idx) => {
+    const chip = document.createElement('div');
+    chip.className = 'filter-chip active';
+    chip.dataset.key = c.key;
+    chip.innerHTML = `<span class="chip-dot" style="background:${c.hex}"></span>${c.label}`;
+    chip.addEventListener('click', () => toggleCategory(c.key, idx, chip));
+    bar.appendChild(chip);
+  });
+  const allLink = document.createElement('div');
+  allLink.className = 'filter-bar-all';
+  allLink.textContent = 'Mostrar todas';
+  allLink.addEventListener('click', () => {
+    categories.forEach((c, idx) => {
+      activeCategories.add(c.key);
+      const chip = bar.querySelector(`[data-key="${c.key}"]`);
+      chip.classList.add('active');
+      chip.classList.remove('inactive');
+      setDatasetVisible(idx, true);
+    });
+  });
+  bar.appendChild(allLink);
+}
+
+function setDatasetVisible(idx, visible){
+  if(lineChartInstance){ lineChartInstance.setDatasetVisibility(idx, visible); lineChartInstance.update(); }
+  if(stackChartInstance){ stackChartInstance.setDatasetVisibility(idx, visible); stackChartInstance.update(); }
+}
+
+function toggleCategory(key, idx, chip){
+  const nowActive = !activeCategories.has(key);
+  if(nowActive){
+    activeCategories.add(key);
+    chip.classList.add('active');
+    chip.classList.remove('inactive');
+  } else {
+    activeCategories.delete(key);
+    chip.classList.remove('active');
+    chip.classList.add('inactive');
+  }
+  setDatasetVisible(idx, nowActive);
 }
 
 function buildWeeksFromRows(rows){
@@ -308,6 +395,8 @@ function render(weeks){
     ? missing.length + ' semana(s) sin datos verificables (' + missing.map(w=>w.label).join(', ') + ')'
     : 'Todas las semanas con datos completos';
 
+  buildFilterBar();
+
   // Table
   const tbody = document.getElementById('tableBody');
   tbody.innerHTML = '';
@@ -323,7 +412,7 @@ function render(weeks){
   });
 
   // Line chart
-  new Chart(document.getElementById('lineChart'), {
+  lineChartInstance = new Chart(document.getElementById('lineChart'), {
     type: 'line',
     data: {
       labels: weeks.map(w=>w.short),
@@ -348,7 +437,7 @@ function render(weeks){
         y: { grid: { color:'#1E2837' }, ticks: { color:'#8896A8', font:{family:'IBM Plex Mono', size:11}, precision:0 }, beginAtZero:true }
       },
       plugins: {
-        legend: { position:'bottom', labels:{ color:'#E7ECF3', font:{family:'Inter', size:12}, boxWidth:10, boxHeight:10, padding:14 } },
+        legend: { position:'bottom', labels:{ color:'#E7ECF3', font:{family:'Inter', size:12}, boxWidth:10, boxHeight:10, padding:14 }, onClick: () => {} },
         tooltip: {
           callbacks: {
             footer: (items) => { const idx = items[0].dataIndex; return weeks[idx].noData ? '⚠ Semana sin datos verificables' : ''; }
@@ -359,7 +448,7 @@ function render(weeks){
   });
 
   // Stacked bar chart
-  new Chart(document.getElementById('stackChart'), {
+  stackChartInstance = new Chart(document.getElementById('stackChart'), {
     type: 'bar',
     data: {
       labels: weeks.map(w=>w.short),
